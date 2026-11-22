@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Woxaum — Chat</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%232fbf71'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>W</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css?v=15" />
+</head>
+<body>
+<div class="auth-screen" id="authScreen" hidden>
+  <div class="auth-card">
+    <div class="auth-logo">W</div>
+    <h1 id="authTitle">Sign in</h1>
+    <p class="auth-sub" id="authSub">Characters and chats live in your account, on this server.</p>
+    <form id="authForm">
+      <label class="field">
+        <span>Login</span>
+        <input id="authLogin" autocomplete="username" spellcheck="false" placeholder="login" maxlength="24" />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input id="authPassword" type="password" autocomplete="current-password" placeholder="••••••" />
+      </label>
+      <label class="field" id="authPassword2Field" hidden>
+        <span>Repeat password</span>
+        <input id="authPassword2" type="password" autocomplete="new-password" placeholder="••••••" />
+      </label>
+      <p class="auth-error" id="authError"></p>
+      <button class="btn btn-primary auth-submit" id="authSubmit" type="submit">Sign in</button>
+    </form>
+    <p class="auth-switch" id="authSwitch">No account yet? <button class="linkbtn" id="authToggle" type="button">Create one</button></p>
+  </div>
+</div>
+
+<div class="app" id="appRoot" hidden>
+
+  <!-- ══════════ LEFT BAR ══════════ -->
+  <aside class="sidebar">
+    <div class="logo" title="Woxaum">W</div>
+
+    <button class="add-char" id="addCharBtn" title="Add character" aria-label="Add character">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+
+    <div class="char-list" id="charList"></div>
+
+    <div class="sidebar-foot">
+      <button class="icon-btn ai-btn" id="aiBtn" title="AI settings" aria-label="AI settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.36.46.62.84.72H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button class="me-avatar" id="meAvatarBtn" title="Your profile" aria-label="Your profile">Y</button>
+    </div>
+  </aside>
+
+  <!-- ══════════ CHAT ══════════ -->
+  <main class="chat">
+    <header class="chat-header" id="chatHeader">
+      <div class="header-avatar" id="headerAvatar"></div>
+      <div class="header-meta">
+        <div class="header-name" id="headerName">Woxaum</div>
+        <div class="header-status" id="headerStatus">No chats yet</div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn is-hidden" id="callBtn" title="Voice call" aria-label="Voice call">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.4 21 3 13.6 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.24.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2z"/></svg>
+        </button>
+        <div class="menu-wrap">
+          <button class="icon-btn" id="moreBtn" title="More" aria-label="More">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+          </button>
+          <div class="menu" id="moreMenu">
+            <button class="menu-item" id="menuAdminBtn" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.3-8 9-4.6-.7-8-4-8-9V7z"/></svg>
+              Admin panel
+            </button>
+            <button class="menu-item" id="menuAiBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="3"/><path d="M12 8V4M8 14h.01M16 14h.01M9 18h6"/></svg>
+              AI settings
+            </button>
+            <button class="menu-item" id="editCharBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+              Edit character
+            </button>
+            <button class="menu-item danger" id="deleteCharBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+              Delete character
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="messages" id="messages">
+      <!-- empty state / greeting card -->
+      <div class="empty-wrap" id="emptyWrap">
+        <div class="empty-inner">
+          <button class="btn btn-primary empty-add" id="emptyAddBtn">+ New character</button>
+          <p class="empty-hint" id="emptyText">Choose a character on the left</p>
+        </div>
+      </div>
+      <div class="msg-list" id="msgList"></div>
+    </section>
+
+    <form class="composer" id="composer">
+      <button type="button" class="icon-btn" id="attachBtn" title="Attach file" aria-label="Attach file">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <textarea id="msgInput" rows="1" placeholder="Message" autocomplete="off"></textarea>
+      <button type="button" class="icon-btn" id="emojiBtn" title="Emoji" aria-label="Emoji">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+      </button>
+      <button type="submit" class="mic-btn" id="sendBtn" title="Voice message" aria-label="Voice message">
+        <svg class="ic-mic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+        <svg class="ic-send" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </form>
+  </main>
+</div>
+
+<!-- ══════════ CREATE CHARACTER MODAL ══════════ -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h2 id="modalTitle">New character</h2>
+      <button class="icon-btn" id="closeModalBtn" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="avatar-picker">
+      <div class="avatar-preview" id="avatarPreview">?</div>
+      <div>
+        <button class="btn btn-ghost" id="avatarUploadBtn" type="button">Upload avatar</button>
+        <button class="btn btn-text" id="avatarRemoveBtn" type="button" style="display:none">Remove</button>
+        <p class="hint">Shown in the left bar and chat header.<br/>Leave empty to use an initial.</p>
+      </div>
+      <input type="file" id="avatarInput" accept="image/*" hidden />
+    </div>
+
+    <label class="field">
+      <span>Name</span>
+      <input type="text" id="charName" placeholder="e.g. Mira" maxlength="40" />
+    </label>
+
+    <label class="field">
+      <span>Character file <em>(who they are — AI reads this later)</em></span>
+      <textarea id="charDesc" rows="3" placeholder="Personality, background, how they talk…"></textarea>
+    </label>
+
+    <label class="field">
+      <span>Attach character file <em>(.txt / .md / .json)</em></span>
+      <div class="file-drop" id="fileDrop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        <span id="fileDropText">Tap to choose a file, or drop it here</span>
+      </div>
+      <input type="file" id="charFileInput" accept=".txt,.md,.json,.yaml,.yml" hidden />
+    </label>
+
+    <label class="field">
+      <span>Greeting <em>(optional — the character answers you first, never starts itself)</em></span>
+      <input type="text" id="charGreeting" placeholder="Hello! Nice to meet you." maxlength="120" />
+    </label>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="cancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="createBtn">Create character</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="adminOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+    <div class="modal-head">
+      <h2 id="adminTitle">Admin panel</h2>
+      <button class="icon-btn" id="closeAdminBtn" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p class="ai-note">All accounts on this server. Passwords are hashed — reset creates a new one.</p>
+    <div class="admin-users" id="adminUsers"></div>
+    <div class="admin-new">
+      <h3>Create account</h3>
+      <div class="key-row">
+        <input id="adminNewLogin" placeholder="login" autocomplete="off" spellcheck="false" />
+        <input id="adminNewPass" type="password" placeholder="password" autocomplete="off" spellcheck="false" />
+      </div>
+      <label class="check"><input type="checkbox" id="adminNewIsAdmin" /> admin rights</label>
+      <button class="btn btn-ghost small" id="adminCreateBtn">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="aiOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
+    <div class="modal-head">
+      <h2 id="aiTitle">AI settings</h2>
+      <button class="icon-btn" id="closeAiBtn" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <p class="ai-note">The AI plays your character using its config. Your key stays in this browser and is sent only to the provider you pick.</p>
+
+    <label class="field">
+      <span>Provider</span>
+      <select id="aiProvider">
+        <option value="gemini">Google Gemini — free key, 1M context</option>
+        <option value="openrouter">OpenRouter — free models (:free)</option>
+        <option value="groq">Groq — free key</option>
+        <option value="custom">Custom OpenAI-compatible API</option>
+      </select>
+    </label>
+
+    <label class="field" id="aiBaseField" style="display:none">
+      <span>Base URL</span>
+      <input type="text" id="aiBase" placeholder="https://host/v1" autocomplete="off" />
+    </label>
+
+    <label class="field">
+      <span>API key</span>
+      <div class="key-row">
+        <input type="password" id="aiKey" placeholder="Paste your key" autocomplete="off" spellcheck="false" />
+        <button type="button" class="icon-btn" id="aiKeyToggle" title="Show / hide" aria-label="Show key">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <a class="hint link" id="aiKeyLink" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free key →</a>
+    </label>
+
+    <label class="field">
+      <span>Model</span>
+      <div class="key-row">
+        <input type="text" id="aiModel" list="aiModels" placeholder="Load the list or type an ID" autocomplete="off" spellcheck="false" />
+        <button type="button" class="btn btn-ghost small" id="aiLoadModels">Load list</button>
+      </div>
+      <datalist id="aiModels"></datalist>
+      <p class="hint" id="aiModelHint">Tap “Load list” to see the models your key can use.</p>
+    </label>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="aiTestBtn">Test</button>
+      <button class="btn btn-ghost" id="aiCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="aiSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="profileOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+    <div class="modal-head">
+      <h2 id="profileTitle">Your profile</h2>
+      <button class="icon-btn" id="closeProfileBtn" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="avatar-picker">
+      <div class="avatar-preview" id="profileAvatarPreview">Y</div>
+      <div>
+        <button class="btn btn-ghost" id="profileAvatarBtn" type="button">Upload avatar</button>
+        <button class="btn btn-text" id="profileAvatarRemoveBtn" type="button" style="display:none">Remove</button>
+        <p class="hint">How you look in Woxaum.</p>
+      </div>
+      <input type="file" id="profileAvatarInput" accept="image/*" hidden />
+    </div>
+
+    <label class="field">
+      <span>Account name</span>
+      <input type="text" id="profileName" placeholder="Your name" maxlength="40" />
+    </label>
+
+    <div class="field">
+      <span>Gender</span>
+      <div class="chips" id="genderChips">
+        <button type="button" class="chip" data-gender="male">Male</button>
+        <button type="button" class="chip" data-gender="female">Female</button>
+        <button type="button" class="chip" data-gender="other">Other</button>
+      </div>
+    </div>
+
+    <div class="account-row">
+      <span class="account-label" id="accountLabel">Signed in as</span>
+      <button class="btn btn-text" id="changePassBtn" type="button">Change password</button>
+      <button class="btn btn-text danger" id="signOutBtn" type="button">Sign out</button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="profileCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="profileSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js?v=15"></script>
+</body>
+</html>
