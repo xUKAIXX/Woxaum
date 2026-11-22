@@ -55,6 +55,8 @@ The key lives only in this browser and is sent only to the provider you chose. T
 - `+` in the left bar creates a character: avatar, name, description, character file (`.txt` / `.md` / `.json`, its text is read and given to the model), greeting.
 - `⋮ → Edit character` changes the same config later, `⋮ → Delete character` removes the chat with it.
 - The character **never speaks first** — it answers your message, in character, streaming token by token.
+- **⤓ in the chat header** downloads the character config as `.txt`; **⋮ → Export chat** saves the whole conversation.
+- If the provider is busy (`429` / `503`) the app retries automatically and shows a **Retry** button on the failed message.
 - Your own profile (bottom-left avatar): picture, account name, gender. It is passed to the model so characters know who they are talking to.
 
 ## Files
