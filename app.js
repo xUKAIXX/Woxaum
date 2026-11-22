@@ -172,7 +172,12 @@ function renderMessages() {
         ? (m.text ? escapeHtml(m.text) + '<span class="caret"></span>' : '<span class="typing"><i></i><i></i><i></i></span>')
         : escapeHtml(m.text);
       const stamp = m.pending ? '' : `<span class="time">${m.time}</span>`;
-      return `<div class="row ${m.role === 'out' ? 'out' : 'in'}"><div class="bubble ${m.role === 'out' ? 'out' : 'in'}${m.pending ? ' pending' : ''}">${body}${stamp}</div></div>`;
+      const bubble = `<div class="bubble ${m.role === 'out' ? 'out' : 'in'}${m.pending ? ' pending' : ''}">${body}${stamp}</div>`;
+      const retry = m.failed
+        ? `<button class="retry-btn" data-retry="1" title="${escapeHtml(m.error || 'Retry')}">↻ Retry</button>`
+        : '';
+      const err = m.failed && m.error ? `<div class="row-error">${escapeHtml(m.error)}</div>` : '';
+      return `<div class="row-wrap"><div class="row ${m.role === 'out' ? 'out' : 'in'}">${bubble}</div>${retry}${err}</div>`;
     }).join('');
     requestAnimationFrame(() => { $('#messages').scrollTop = $('#messages').scrollHeight; });
   }
@@ -314,7 +319,7 @@ $('#avatarRemoveBtn').addEventListener('click', () => {
 });
 
 const fileDrop = $('#fileDrop');
-fileDrop.addEventListener('click', () => $('#charFileInput').click());
+fileDrop.addEventListener('click', (e) => { e.preventDefault(); $('#charFileInput').click(); });
 $('#charFileInput').addEventListener('change', (e) => setFile(e.target.files[0]));
 ['dragover', 'dragenter'].forEach((ev) => fileDrop.addEventListener(ev, (e) => { e.preventDefault(); fileDrop.classList.add('drag'); }));
 ['dragleave', 'drop'].forEach((ev) => fileDrop.addEventListener(ev, (e) => { e.preventDefault(); fileDrop.classList.remove('drag'); }));
@@ -359,7 +364,7 @@ $('#createBtn').addEventListener('click', () => {
     return;
   }
 
-  const char = { id: uid(), ...data };
+  const char = { id: uid(), createdAt: new Date().toISOString(), ...data };
   state.characters.push(char);
   state.activeId = char.id;
   save();
@@ -521,9 +526,9 @@ function syncAiFields() {
   const link = $('#aiKeyLink');
   if (p.keyUrl) { link.href = p.keyUrl; link.style.display = ''; }
   else { link.style.display = 'none'; }
-  $('#aiModelHint').textContent = id === 'openrouter'
+  setAiHint(id === 'openrouter'
     ? 'Free keys see the ":free" models (Gemma, Nemotron, Qwen…). Tap “Load list”.'
-    : 'Tap “Load list” to see the models your key can use.';
+    : 'Tap “Load list” to see the models your key can use.', false);
 }
 
 $('#aiBtn').addEventListener('click', openAiModal);
@@ -540,7 +545,39 @@ $('#aiKeyToggle').addEventListener('click', () => {
 function aiBaseUrl() {
   const id = $('#aiProvider').value;
   const p = providerOf(id);
-  return (id === 'custom' ? $('#aiBase').value : p.base).trim().replace(/\/+$/, '');
+  const raw = id === 'custom' ? $('#aiBase').value : p.base;
+  return String(raw || '').trim().replace(/\/+$/, '');
+}
+
+function shorten(text, max) {
+  const value = String(text || '').replace(/\s+/g, ' ').trim();
+  return value.length > max ? value.slice(0, max - 1) + '…' : value;
+}
+
+function setAiHint(text, isError) {
+  const el = $('#aiModelHint');
+  el.textContent = text;
+  el.classList.toggle('error', !!isError);
+}
+
+/** Pick a sane default: real chat models first, retired previews and media models last. */
+function pickModel(ids, providerId) {
+  const score = (id) => {
+    if (/image|tts|embedding|transcribe|robotics|lyria|computer-use|deep-research|antigravity|omni/i.test(id)) return -1000;
+    let n;
+    if (/flash-lite/i.test(id)) n = 60;
+    else if (/flash/i.test(id)) n = 80;
+    else if (/pro/i.test(id)) n = 70;
+    else if (/gemma/i.test(id)) n = 55;
+    else if (/nemotron|qwen|glm|llama|mistral|deepseek/i.test(id)) n = 50;
+    else n = 20;
+    const version = id.match(/(\d+(?:\.\d+)?)/);
+    if (version) n += Math.min(parseFloat(version[1]), 9) / 10;
+    if (/preview|exp/i.test(id)) n -= 1;
+    if (/latest/i.test(id)) n -= 2;
+    return n;
+  };
+  return [...ids].sort((a, b) => score(b) - score(a))[0] || ids[0];
 }
 
 async function fetchModelList(providerId, key, base) {
@@ -572,18 +609,18 @@ $('#aiLoadModels').addEventListener('click', async () => {
   if (providerId === 'custom' && !base) { toast('Enter the base URL first'); $('#aiBase').focus(); return; }
   const btn = $('#aiLoadModels');
   btn.disabled = true; btn.textContent = '…';
+  setAiHint('Loading models…', false);
   try {
     const ids = await fetchModelList(providerId, key, base);
-    if (!ids.length) { toast('No models returned — check the key'); return; }
+    if (!ids.length) throw new Error('No models returned — check the key');
     $('#aiModels').innerHTML = ids.map((id) => `<option value="${escapeHtml(id)}"></option>`).join('');
     const cur = $('#aiModel').value.trim();
-    if (!cur || !ids.includes(cur)) {
-      const liked = ids.find((id) => /flash|gemma|nemotron|qwen|glm|llama/i.test(id)) || ids[0];
-      $('#aiModel').value = liked;
-    }
-    $('#aiModelHint').textContent = `${ids.length} models available — pick one from the list.`;
+    if (!cur || !ids.includes(cur)) $('#aiModel').value = pickModel(ids, providerId);
+    setAiHint(`${ids.length} models available — pick one from the list.`, false);
   } catch (err) {
-    toast('Could not load models: ' + String(err.message || err).slice(0, 140));
+    const msg = String(err.message || err);
+    setAiHint('Could not load models: ' + msg, true);
+    toast('Could not load models: ' + shorten(msg, 200), 8000);
   } finally {
     btn.disabled = false; btn.textContent = 'Load list';
   }
@@ -627,6 +664,12 @@ function buildSystemPrompt(char) {
   out.push('', `You are talking to ${me.name || 'the user'}${me.gender ? ` (${me.gender})` : ''}.`);
   out.push('', 'Answer the last user message in character, in the language they use.');
   return out.join('\n');
+}
+
+function httpError(res, text) {
+  const err = new Error(text);
+  err.status = res.status;
+  return err;
 }
 
 async function errText(res) {
@@ -677,7 +720,7 @@ async function streamOpenAI(ai, system, history, onDelta) {
       messages: [{ role: 'system', content: system }, ...history],
     }),
   });
-  if (!res.ok) throw new Error(await errText(res));
+  if (!res.ok) throw httpError(res, await errText(res));
   await readSSE(res, (obj) => {
     const d = obj.choices?.[0]?.delta?.content;
     if (d) onDelta(d);
@@ -695,7 +738,7 @@ async function streamGemini(ai, system, history, onDelta) {
       generationConfig: { temperature: 0.9, maxOutputTokens: 1024 },
     }),
   });
-  if (!res.ok) throw new Error(await errText(res));
+  if (!res.ok) throw httpError(res, await errText(res));
   await readSSE(res, (obj) => {
     const t = (obj.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
     if (t) onDelta(t);
@@ -710,16 +753,29 @@ function scheduleRender() {
   requestAnimationFrame(() => { renderQueued = false; renderMessages(); });
 }
 
+const RETRIABLE = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+function isRetriable(err) {
+  if (!err) return false;
+  if (err.status && RETRIABLE.has(err.status)) return true;
+  return /high demand|overload|temporar|rate limit|quota|failed to fetch|network/i.test(String(err.message || ''));
+}
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function askAI(char) {
   if (aiBusy) return;
   const ai = state.ai;
   if (!ai.key || !ai.model) {
-    toast('Connect an AI first — gear icon at the bottom left');
+    toast('Connect an AI first — gear icon at the bottom left', 5000);
     openAiModal();
     return;
   }
 
   const list = (state.messages[char.id] = state.messages[char.id] || []);
+  const lastOut = [...list].reverse().find((m) => m.role === 'out');
+  if (lastOut) { delete lastOut.failed; delete lastOut.error; }
+
   const reply = { role: 'in', text: '', time: nowTime(), pending: true };
   list.push(reply);
   aiBusy = true;
@@ -734,19 +790,48 @@ async function askAI(char) {
       .map((m) => ({ role: m.role === 'out' ? 'user' : 'assistant', content: m.text }));
     const system = buildSystemPrompt(char);
 
-    if (providerOf(ai.provider).kind === 'gemini') {
-      await streamGemini(ai, system, history, (d) => { reply.text += d; scheduleRender(); });
-    } else {
-      await streamOpenAI(ai, system, history, (d) => { reply.text += d; scheduleRender(); });
+    const attempt = async () => {
+      reply.text = '';
+      scheduleRender();
+      if (providerOf(ai.provider).kind === 'gemini') {
+        await streamGemini(ai, system, history, (d) => { reply.text += d; scheduleRender(); });
+      } else {
+        await streamOpenAI(ai, system, history, (d) => { reply.text += d; scheduleRender(); });
+      }
+    };
+
+    let lastErr = null;
+    for (let i = 0; i < 3; i++) {
+      try {
+        await attempt();
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (!isRetriable(err) || i === 2) break;
+        $('#headerStatus').textContent = `retrying… (${i + 2}/3)`;
+        toast(`${shorten(err.message || err, 140)} — retrying…`, 4000);
+        await wait(i === 0 ? 1800 : 4500);
+      }
     }
+    if (lastErr) throw lastErr;
 
     reply.text = reply.text.trim();
     if (!reply.text) throw new Error('The model returned an empty reply');
     delete reply.pending;
+
+    // 503/429 usually means "this model is busy" — offer the way out once
+    if (lastOut) { delete lastOut.failed; delete lastOut.error; }
   } catch (err) {
     const i = list.indexOf(reply);
     if (i > -1) list.splice(i, 1);
-    toast('AI error: ' + String(err.message || err).slice(0, 150));
+    const msg = String(err.message || err);
+    if (lastOut) {
+      lastOut.failed = true;
+      lastOut.error = shorten(msg, 220);
+    }
+    const busy = err.status === 429 || err.status === 503 || isRetriable(err);
+    toast('AI error: ' + shorten(msg, 260) + (busy ? '  ·  try another model in ⚙' : ''), 9000);
   } finally {
     aiBusy = false;
     $('#sendBtn').disabled = false;
@@ -755,6 +840,16 @@ async function askAI(char) {
     renderMessages();
   }
 }
+
+/* Retry from the failed message */
+$('#msgList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.retry-btn');
+  if (!btn) return;
+  const char = activeChar();
+  if (!char) return;
+  btn.disabled = true;
+  askAI(char);
+});
 
 $('#aiTestBtn').addEventListener('click', async () => {
   const key = $('#aiKey').value.trim();
@@ -773,20 +868,87 @@ $('#aiTestBtn').addEventListener('click', async () => {
     }
     toast(got.trim() ? 'Works — model replied' : 'Connected, but the reply was empty');
   } catch (err) {
-    toast('Failed: ' + String(err.message || err).slice(0, 150));
+    setAiHint('Test failed: ' + shorten(err.message || err, 260), true);
+    toast('Failed: ' + shorten(err.message || err, 220), 9000);
   } finally {
     btn.disabled = false; btn.textContent = 'Test';
   }
 });
 
+
+/* ─────────── Export .txt ─────────── */
+function safeFileName(name) {
+  return String(name || 'character').replace(/[\\/:*?"<>|\n\r]+/g, '_').trim().slice(0, 60) || 'character';
+}
+
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function characterToText(char) {
+  const lines = [];
+  lines.push(`CHARACTER — ${char.name}`);
+  if (char.createdAt) lines.push(`created: ${new Date(char.createdAt).toLocaleString()}`);
+  lines.push('', 'DESCRIPTION', '-----------', char.desc || '(empty)', '');
+  if (char.fileText) lines.push('CHARACTER FILE', '--------------', char.fileText, '');
+  else if (char.fileName) lines.push(`ATTACHED FILE: ${char.fileName} (text was not read)`, '');
+  lines.push('GREETING', '--------', char.greeting || '(empty)', '', '— exported from Woxaum');
+  return lines.join('\n');
+}
+
+function chatToText(char) {
+  const msgs = state.messages[char.id] || [];
+  const me = (state.profile && state.profile.name) || 'Me';
+  const lines = [
+    `CHAT — ${char.name}`,
+    `exported: ${new Date().toLocaleString()}`,
+    ''.padEnd(40, '-'),
+    '',
+  ];
+  msgs.filter((m) => !m.pending).forEach((m) => {
+    lines.push(`[${m.time}] ${m.role === 'out' ? me : char.name}: ${m.text}`);
+  });
+  return lines.join('\n');
+}
+
+function exportCharacter() {
+  const char = activeChar();
+  if (!char) { toast('No character selected'); return; }
+  downloadText(`${safeFileName(char.name)}.txt`, characterToText(char));
+  toast(`${char.name}.txt downloaded`, 3000);
+}
+
+function exportChat() {
+  const char = activeChar();
+  if (!char) { toast('No character selected'); return; }
+  const msgs = (state.messages[char.id] || []).filter((m) => !m.pending);
+  if (!msgs.length) { toast('No messages to export yet'); return; }
+  downloadText(`${safeFileName(char.name)}-chat.txt`, chatToText(char));
+  toast('Chat exported as .txt', 3000);
+}
+
+$('#exportCharBtn').addEventListener('click', exportCharacter);
+$('#exportChatBtn').addEventListener('click', () => {
+  $('#moreMenu').classList.remove('open');
+  exportChat();
+});
+
 /* ─────────── Toast ─────────── */
 let toastTimer;
-function toast(msg) {
+function toast(msg, ms = 2600) {
   const t = $('#toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
 }
 
 
@@ -1135,6 +1297,9 @@ $('#adminCreateBtn').addEventListener('click', async () => {
 /* ─────────── Init ─────────── */
 
 async function detectMode() {
+  const host = location.hostname;
+  const staticHost = /(^|\.)github\.io$/i.test(host) || /(^|\.)githubusercontent\.com$/i.test(host) || location.protocol === 'file:';
+  if (staticHost) return 'local';
   try {
     const res = await fetch('/api/health', { cache: 'no-store' });
     const type = res.headers.get('content-type') || '';

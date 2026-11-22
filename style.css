@@ -192,10 +192,21 @@ input, textarea { font-family: inherit; }
 .btn-text { color: var(--muted); padding: 10px 8px; }
 .btn-text:hover { color: #ff7070; }
 
-.msg-list { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 7px; padding-bottom: 6px; }
+.msg-list { max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; gap: 7px; padding-bottom: 6px; }
 .row { display: flex; align-items: flex-end; gap: 8px; width: 100%; animation: slideUp .22s ease; }
 .row.out { justify-content: flex-end; }
 .row.in { justify-content: flex-start; }
+.row-wrap { display: flex; flex-direction: column; gap: 5px; }
+.retry-btn {
+  align-self: flex-end; font-size: 12px; font-weight: 600; color: #ffd08a;
+  padding: 4px 9px; border-radius: 9px; background: rgba(255,180,80,.12);
+  border: 1px solid rgba(255,180,80,.28); white-space: nowrap;
+}
+.retry-btn:hover { background: rgba(255,180,80,.2); }
+.row-error {
+  align-self: flex-end; max-width: 88%; text-align: right;
+  font-size: 11.5px; line-height: 1.4; color: #ff9b9b; opacity: .85;
+}
 .bubble {
   max-width: 72%; padding: 9px 13px 7px; border-radius: 16px;
   font-size: 15px; line-height: 1.38; word-break: break-word;
@@ -317,6 +328,7 @@ input, textarea { font-family: inherit; }
 .key-row .icon-btn:hover { color: #fff; background: rgba(255,255,255,.07); }
 .btn.small { padding: 9px 13px; font-size: 13px; flex: 0 0 auto; }
 .hint.link { color: var(--green); text-decoration: none; display: inline-block; margin-top: 8px; }
+#aiModelHint.error { color: #ff9b9b; }
 .hint.link:hover { text-decoration: underline; }
 .field select {
   width: 100%; padding: 11px 12px; border-radius: 10px;
@@ -403,11 +415,32 @@ input, textarea { font-family: inherit; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 @media (max-width: 640px) {
-  .sidebar { width: 68px; flex-basis: 68px; }
-  .add-char, .char-btn { width: 48px; height: 48px; flex-basis: 48px; }
+  .sidebar {
+    width: 64px; flex-basis: 64px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    gap: 12px;
+  }
+  .add-char, .char-btn { width: 46px; height: 46px; flex-basis: 46px; }
   .char-btn .tip { display: none; }
-  .chat-header, .composer { margin-left: 10px; margin-right: 10px; }
-  .messages { padding: 12px; }
-  .bubble { max-width: 86%; }
+  .logo { width: 38px; height: 38px; font-size: 19px; }
+  .chat-header {
+    margin: calc(8px + env(safe-area-inset-top)) 8px 0;
+    padding: 7px 10px; border-radius: 16px;
+  }
+  .composer {
+    margin: 0 8px calc(8px + env(safe-area-inset-bottom));
+    border-radius: 20px;
+  }
+  .messages { padding: 12px 10px; }
+  .bubble { max-width: 88%; font-size: 16px; line-height: 1.4; }
+  .composer textarea { font-size: 16px; }
   .empty-inner { padding: 16px; gap: 14px; }
+  .toast { max-width: calc(100vw - 24px); font-size: 13px; }
+}
+
+@media (max-width: 380px) {
+  .sidebar { width: 58px; flex-basis: 58px; }
+  .add-char, .char-btn { width: 42px; height: 42px; flex-basis: 42px; }
+  .bubble { max-width: 90%; font-size: 15.5px; }
 }
