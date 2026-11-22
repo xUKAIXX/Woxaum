@@ -57,7 +57,7 @@ The key lives only in this browser and is sent only to the provider you chose. T
 - The character **never speaks first** — it answers your message, in character, streaming token by token.
 - **⤓ in the chat header** downloads the character config as `.txt`; **⋮ → Export chat** saves the whole conversation.
 - If the provider is busy (`429` / `503`) the app retries automatically and shows a **Retry** button on the failed message.
-- Your own profile (bottom-left avatar): picture, account name, gender. It is passed to the model so characters know who they are talking to.
+- Your own profile (bottom-left avatar): picture, account name, gender and **interface size** (100 / 115 / 130 / 150% — the desktop default is 130%). It is passed to the model so characters know who they are talking to.
 
 ## Files
 

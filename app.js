@@ -3,6 +3,7 @@ const $ = (s) => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
 const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+const DEFAULT_UI_SCALE = 1.3;
 const TOKEN_KEY = 'woxaum-token';
 let token = localStorage.getItem(TOKEN_KEY) || '';
 let currentUser = null;
@@ -11,7 +12,7 @@ const blankState = () => ({
   characters: [],
   activeId: null,
   messages: {},
-  profile: { name: '', avatar: null, gender: '' },
+  profile: { name: '', avatar: null, gender: '', uiScale: DEFAULT_UI_SCALE },
   ai: { provider: 'gemini', key: '', model: '', base: '' },
 });
 let state = blankState();
@@ -410,6 +411,33 @@ $('#deleteCharBtn').addEventListener('click', () => {
 /* ─────────── Your profile ─────────── */
 let tempProfileAvatar = null;
 let tempGender = '';
+let tempScale = DEFAULT_UI_SCALE;
+let tempScalePreview = null;
+
+function uiScale() {
+  const value = Number(state.profile && state.profile.uiScale);
+  return value >= 1 && value <= 2 ? value : DEFAULT_UI_SCALE;
+}
+
+function applyUiScale() {
+  const root = document.documentElement;
+  if (window.innerWidth <= 640) {
+    // phones keep their own compact sizing
+    root.style.removeProperty('--u');
+    return;
+  }
+  root.style.setProperty('--u', String(tempScalePreview ?? uiScale()));
+}
+
+window.addEventListener('resize', () => {
+  if (tempScalePreview === null) applyUiScale();
+});
+
+function paintScaleChips() {
+  document.querySelectorAll('#uiScaleChips .chip').forEach((chip) => {
+    chip.classList.toggle('active', Math.abs(Number(chip.dataset.scale) - tempScale) < 0.001);
+  });
+}
 
 function profileInitial() {
   const n = (state.profile.name || '').trim();
@@ -450,12 +478,20 @@ function openProfile() {
   tempProfileAvatar = state.profile.avatar || null;
   tempGender = state.profile.gender || '';
   $('#profileName').value = state.profile.name || '';
+  tempScale = uiScale();
+  tempScalePreview = null;
+  paintScaleChips();
+  applyUiScale();
   paintProfilePreview();
   paintGenderChips();
   $('#profileOverlay').classList.add('open');
   setTimeout(() => $('#profileName').focus(), 60);
 }
-function closeProfile() { $('#profileOverlay').classList.remove('open'); }
+function closeProfile() {
+  $('#profileOverlay').classList.remove('open');
+  tempScalePreview = null;
+  applyUiScale();
+}
 
 $('#meAvatarBtn').addEventListener('click', openProfile);
 $('#closeProfileBtn').addEventListener('click', closeProfile);
@@ -484,12 +520,24 @@ $('#genderChips').addEventListener('click', (e) => {
   paintGenderChips();
 });
 
+$('#uiScaleChips').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  tempScale = Number(chip.dataset.scale) || DEFAULT_UI_SCALE;
+  tempScalePreview = tempScale;
+  paintScaleChips();
+  applyUiScale();
+});
+
 $('#profileSaveBtn').addEventListener('click', () => {
   state.profile = {
     name: $('#profileName').value.trim(),
     avatar: tempProfileAvatar,
     gender: tempGender,
+    uiScale: tempScale,
   };
+  tempScalePreview = null;
+  applyUiScale();
   save();
   renderProfile();
   closeProfile();
@@ -1164,6 +1212,7 @@ async function enterApp(user) {
   renderAll();
   renderProfile();
   updateAiIndicator();
+  applyUiScale();
   toggleSendIcon();
   $('#accountLabel').textContent = `Signed in as ${user.login}${user.isAdmin ? ' · admin' : ''}`;
 }
