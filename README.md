@@ -59,34 +59,6 @@ The key lives only in this browser and is sent only to the provider you chose. T
 - If the provider is busy (`429` / `503`) the app retries automatically and shows a **Retry** button on the failed message.
 - Your own profile (bottom-left avatar): picture, account name, gender and **interface size** (100 / 115 / 130 / 150% — the desktop default is 130%). It is passed to the model so characters know who they are talking to.
 
-## Cloud accounts (so friends can sign in from their phones)
-
-The GitHub Pages build has no server, so accounts and chats are stored in **Supabase** instead.
-`supabase-config.js` holds the project URL and the **public (publishable)** key — that key is meant
-to be public; row-level security keeps every row private to its owner.
-
-If the config is empty, or the network/Supabase is unreachable, the app falls back to the old
-browser-only mode, so it never ends up with a dead screen.
-
-Set-up already done for this repo's project:
-
-1. **SQL Editor** — create tables `profiles`, `characters`, `messages` with RLS policies and the
-   `handle_new_user()` trigger (a new auth user automatically gets a profile row).
-2. **Authentication → Providers → Email** — turn **Confirm email** *off*, otherwise sign-up returns
-   no session and the app shows a hint about that switch.
-3. **Admin** — `Authentication → Users → Add user` with `admin@woxaum.local` (Auto Confirm), then in
-   the SQL Editor: `update public.profiles set is_admin = true where login = 'admin';`, and sign in
-   with `admin` / `admin`.
-4. **URL Configuration** — Site URL `https://xukaixx.github.io/Woxaum/`, redirects
-   `https://xukaixx.github.io` and `https://xukaixx.github.io/Woxaum/`.
-
-Logins stay plain (`pavel`), and are mapped to `pavel@woxaum.local` inside Supabase Auth — the user
-never types an email. Letters, digits, `_ . -`, 3–24 characters.
-
-What syncs: characters (avatar, description, attached file text, greeting), all messages, and your
-profile (picture, name, gender, interface size). AI keys stay per device in `localStorage` — they are
-never uploaded. Data created in the old browser-only mode is offered for import once, on first sign-in.
-
 ## Files
 
 | File | What's inside |
@@ -95,4 +67,3 @@ never uploaded. Data created in the old browser-only mode is offered for import 
 | `style.css` | All styling: doodle background, bubbles, typing indicator, modals. |
 | `app.js` | State, rendering, accounts/API calls, admin panel and the AI layer (Gemini + OpenAI-compatible streaming). |
 | `server.py` | Static file server + accounts API (register/login/token/state/admin), SQLite storage. |
-| `supabase-config.js` | Supabase project URL + publishable key; empty values = browser-only mode. |

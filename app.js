@@ -1,8 +1,6 @@
 /* Woxaum — visual chat (no AI yet) */
 const $ = (s) => document.querySelector(s);
-const uid = () => (window.crypto && crypto.randomUUID
-  ? crypto.randomUUID()
-  : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
 const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 const DEFAULT_UI_SCALE = 1.3;
@@ -25,13 +23,10 @@ function withToken(path) {
   return path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
 }
 
-// 'server' — python3 server.py, 'supabase' — static hosting with real synced accounts,
-// 'local' — static hosting with accounts kept in this browser
-let appMode = 'server';
+let appMode = 'server'; // 'server' — python3 server.py, 'local' — static hosting (GitHub Pages)
 
 async function api(path, { method = 'GET', body } = {}) {
   if (appMode === 'local') return localApi(path, { method, body });
-  if (appMode === 'supabase') return supaApi(path, { method, body });
   const res = await fetch(withToken(path), {
     method,
     headers: {
@@ -49,281 +44,6 @@ async function api(path, { method = 'GET', body } = {}) {
     throw err;
   }
   return data;
-}
-
-
-/* ─────────── Supabase mode ─────────── */
-const SUPA = window.WOXAUM_SUPABASE || {};
-const AI_KEY = 'woxaum-ai';
-let supa = null;
-let supaCharIds = new Set();
-let supaMsgCount = {};
-
-function supabaseConfigured() {
-  return !!(SUPA.url && SUPA.key && window.supabase && typeof window.supabase.createClient === 'function');
-}
-
-function supaClient() {
-  if (!supa) {
-    supa = window.supabase.createClient(SUPA.url, SUPA.key, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
-    });
-  }
-  return supa;
-}
-
-function emailFor(login) {
-  const safe = String(login || '').toLowerCase().trim().replace(/[^a-z0-9._-]/g, '');
-  return `${safe}@woxaum.local`;
-}
-
-function supaError(error, status = 400) {
-  const message = (error && error.message) || 'Supabase error';
-  if (/already registered|duplicate key|unique constraint/i.test(message)) {
-    return fail('That login is taken', 409);
-  }
-  if (/invalid login credentials|invalid.*password/i.test(message)) {
-    return fail('Wrong login or password', 401);
-  }
-  if (/email not confirmed/i.test(message)) {
-    return fail('Confirm email is still ON in Supabase — turn it off in Authentication → Providers → Email', 400);
-  }
-  return fail(message, status);
-}
-
-function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
-}
-
-async function ensureProfile(sb, authUser, loginHint) {
-  if (!authUser) throw fail('Not signed in', 401);
-  const { data, error } = await sb.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
-  if (error) throw fail(error.message, 400);
-
-  if (data) {
-    return { id: data.id, login: data.login, isAdmin: !!data.is_admin, createdAt: data.created_at, displayName: data.display_name || '' };
-  }
-
-  const login = loginHint || (authUser.user_metadata && authUser.user_metadata.login) || String(authUser.email || '').split('@')[0];
-  const { data: created, error: insertError } = await sb
-    .from('profiles')
-    .insert({ id: authUser.id, login })
-    .select()
-    .maybeSingle();
-  if (insertError) throw fail(insertError.message, 400);
-  return {
-    id: authUser.id,
-    login,
-    isAdmin: !!(created && created.is_admin),
-    createdAt: created && created.created_at,
-    displayName: (created && created.display_name) || '',
-  };
-}
-
-function readLocalAi() {
-  try {
-    return { ...blankState().ai, ...(JSON.parse(localStorage.getItem(AI_KEY)) || {}) };
-  } catch (e) {
-    return blankState().ai;
-  }
-}
-function writeLocalAi(ai) {
-  try { localStorage.setItem(AI_KEY, JSON.stringify(ai)); } catch (e) { /* ignore */ }
-}
-
-async function loadSupaState(sb, userId) {
-  const [profileRes, charRes, msgRes] = await Promise.all([
-    sb.from('profiles').select('*').eq('id', userId).maybeSingle(),
-    sb.from('characters').select('*').eq('user_id', userId).order('created_at'),
-    sb.from('messages').select('*').eq('user_id', userId).order('id'),
-  ]);
-  if (charRes.error) throw fail(charRes.error.message, 400);
-
-  const characters = (charRes.data || []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    avatar: row.avatar || null,
-    desc: row.description || '',
-    fileName: row.file_name || '',
-    fileText: row.file_text || '',
-    greeting: row.greeting || '',
-    createdAt: row.created_at,
-  }));
-
-  const messages = {};
-  const counts = {};
-  (msgRes.data || []).forEach((row) => {
-    const list = (messages[row.character_id] = messages[row.character_id] || []);
-    list.push({
-      role: row.role,
-      text: row.body,
-      time: new Date(row.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    });
-    counts[row.character_id] = (counts[row.character_id] || 0) + 1;
-  });
-
-  const p = profileRes.data || {};
-  return {
-    characters,
-    activeId: characters[0] ? characters[0].id : null,
-    messages,
-    profile: {
-      name: p.display_name || '',
-      avatar: p.avatar || null,
-      gender: p.gender || '',
-      uiScale: Number(p.ui_scale) || DEFAULT_UI_SCALE,
-    },
-    ai: readLocalAi(),
-    counts,
-  };
-}
-
-let supaSaveTimer = null;
-function scheduleSupaSave() {
-  clearTimeout(supaSaveTimer);
-  supaSaveTimer = setTimeout(syncSupa, 700);
-}
-
-async function syncSupa() {
-  if (appMode !== 'supabase' || !currentUser) return;
-  const sb = supaClient();
-  const me = currentUser.id;
-
-  try {
-    // profile
-    const base = {
-      id: me,
-      login: currentUser.login,
-      avatar: state.profile.avatar || null,
-      gender: state.profile.gender || '',
-      ui_scale: Number(state.profile.uiScale) || DEFAULT_UI_SCALE,
-    };
-    let res = await sb.from('profiles').upsert({ ...base, display_name: state.profile.name || '' });
-    if (res.error && /display_name/i.test(res.error.message)) res = await sb.from('profiles').upsert(base);
-
-    // characters
-    if (state.characters.length) {
-      const rows = state.characters.map((c) => ({
-        id: c.id,
-        user_id: me,
-        name: c.name,
-        description: c.desc || '',
-        file_name: c.fileName || '',
-        file_text: c.fileText || '',
-        greeting: c.greeting || '',
-        avatar: c.avatar || null,
-        created_at: c.createdAt || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }));
-      const { error } = await sb.from('characters').upsert(rows, { onConflict: 'id' });
-      if (error) throw error;
-    }
-
-    const localIds = new Set(state.characters.map((c) => c.id));
-    const removed = [...supaCharIds].filter((id) => !localIds.has(id));
-    if (removed.length) await sb.from('characters').delete().in('id', removed);
-    supaCharIds = localIds;
-
-    // new messages only
-    for (const [charId, list] of Object.entries(state.messages)) {
-      if (!localIds.has(charId)) continue;
-      const clean = list.filter((m) => !m.pending);
-      const known = supaMsgCount[charId] || 0;
-      if (clean.length <= known) continue;
-      const rows = clean.slice(known).map((m) => ({
-        character_id: charId,
-        user_id: me,
-        role: m.role,
-        body: m.text,
-      }));
-      const { error } = await sb.from('messages').insert(rows);
-      if (error) throw error;
-      supaMsgCount[charId] = known + rows.length;
-    }
-
-    savedFailing = false;
-  } catch (error) {
-    if (!savedFailing) {
-      savedFailing = true;
-      toast('Could not save to Supabase: ' + shorten(error.message || error, 140), 7000);
-    }
-  }
-}
-
-async function supaApi(path, { method = 'GET', body = {} } = {}) {
-  const sb = supaClient();
-  const route = path.split('?')[0];
-
-  if (route === '/api/health') return { ok: true, mode: 'supabase' };
-
-  if (route === '/api/register') {
-    const login = String(body.login || '').trim();
-    if (!/^[\w.-]{3,24}$/.test(login)) throw fail('Login: 3–24 chars, letters, digits, _ . -', 400);
-    const email = emailFor(login);
-    const { data, error } = await sb.auth.signUp({ email, password: body.password, options: { data: { login } } });
-    if (error) throw supaError(error);
-    if (!data.session) {
-      throw fail('Supabase wants an email confirmation. Turn off "Confirm email" in Authentication → Providers → Email.', 400);
-    }
-    const profile = await ensureProfile(sb, data.user, login);
-    return { token: data.session.access_token, user: profile };
-  }
-
-  if (route === '/api/login') {
-    const { data, error } = await sb.auth.signInWithPassword({
-      email: emailFor(body.login || ''),
-      password: body.password || '',
-    });
-    if (error) throw supaError(error, 401);
-    const profile = await ensureProfile(sb, data.user);
-    return { token: data.session.access_token, user: profile };
-  }
-
-  if (route === '/api/logout') {
-    await sb.auth.signOut();
-    return { ok: true };
-  }
-
-  if (route === '/api/me') {
-    const { data } = await sb.auth.getSession();
-    if (!data.session) throw fail('Not signed in', 401);
-    return { user: await ensureProfile(sb, data.session.user) };
-  }
-
-  if (route === '/api/state') {
-    const { data } = await sb.auth.getSession();
-    if (!data.session) throw fail('Not signed in', 401);
-    if (method === 'PUT') return { ok: true };
-    return { state: await loadSupaState(sb, data.session.user.id) };
-  }
-
-  if (route === '/api/admin/users') {
-    const { data, error } = await sb.from('profiles').select('id, login, is_admin, created_at').order('created_at');
-    if (error) throw fail(error.message, 403);
-    return { users: (data || []).map((u) => ({ id: u.id, login: u.login, isAdmin: !!u.is_admin, createdAt: u.created_at })) };
-  }
-
-  if (route === '/api/admin/delete') {
-    if (currentUser && body.id === currentUser.id) throw fail('You cannot delete your own account', 400);
-    const { error } = await sb.from('profiles').delete().eq('id', body.id);
-    if (error) throw fail(error.message, 400);
-    return { ok: true };
-  }
-
-  if (route === '/api/admin/password') {
-    if (!currentUser || body.id !== currentUser.id) {
-      throw fail('In Supabase mode only the owner can change a password — use the Supabase dashboard for others.', 400);
-    }
-    const { error } = await sb.auth.updateUser({ password: body.password });
-    if (error) throw fail(error.message, 400);
-    return { ok: true };
-  }
-
-  if (route === '/api/admin/create') {
-    throw fail('Accounts are created by signing up (or in the Supabase dashboard → Authentication → Users).', 400);
-  }
-
-  throw fail('Not found', 404);
 }
 
 function adoptState(raw) {
@@ -345,7 +65,6 @@ function adoptState(raw) {
 let saveTimer = null;
 let savedFailing = false;
 function save() {
-  if (appMode === 'supabase') { scheduleSupaSave(); return; }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(pushState, 450);
 }
@@ -359,7 +78,7 @@ async function pushState() {
   }
 }
 window.addEventListener('beforeunload', () => {
-  if (!token || appMode !== 'server') return;
+  if (!token || appMode === 'local') return;
   try {
     fetch(withToken('/api/state'), {
       method: 'PUT',
@@ -967,7 +686,6 @@ function saveAiSettings(silent) {
     base: $('#aiBase').value.trim(),
   };
   save();
-  if (appMode === 'supabase') writeLocalAi(state.ai);
   updateAiIndicator();
   if (!silent) toast(state.ai.key && state.ai.model ? 'AI connected' : 'Saved — add a key and a model');
 }
@@ -1450,14 +1168,9 @@ function setAuthMode(mode) {
   const reg = mode === 'register';
   $('#authTitle').textContent = reg ? 'Create account' : 'Sign in';
   const local = appMode === 'local';
-  const cloud = appMode === 'supabase';
   $('#authSub').textContent = reg
-    ? (local
-      ? 'Web version: the account is stored in this browser.'
-      : cloud ? 'Create an account — characters and chats sync across your devices.' : 'One account per person — characters, chats and settings stay inside it.')
-    : (local
-      ? 'Web version (static hosting): accounts live in this browser. Try admin / admin.'
-      : cloud ? 'Synced account — sign in from any device.' : 'Characters and chats live in your account, on this server.');
+    ? (local ? 'Web version: the account is stored in this browser.' : 'One account per person — characters, chats and settings stay inside it.')
+    : (local ? 'Web version (static hosting): accounts live in this browser. Try admin / admin.' : 'Characters and chats live in your account, on this server.');
   $('#authSubmit').textContent = reg ? 'Create account' : 'Sign in';
   $('#authPassword2Field').hidden = !reg;
   $('#authPassword').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
@@ -1477,69 +1190,19 @@ function showAuth() {
   setTimeout(() => $('#authLogin').focus(), 60);
 }
 
-function readLocalBackup(login) {
-  try {
-    const db = JSON.parse(localStorage.getItem('woxaum-local-v1') || 'null');
-    if (db && Array.isArray(db.users)) {
-      const found = db.users.find((u) => String(u.login).toLowerCase() === String(login).toLowerCase());
-      if (found && db.data && db.data[found.id]) return db.data[found.id];
-    }
-  } catch (e) { /* ignore */ }
-  try {
-    const legacy = JSON.parse(localStorage.getItem('woxaum-v1'));
-    if (legacy && Array.isArray(legacy.characters)) return legacy;
-  } catch (e) { /* ignore */ }
-  return null;
-}
-
 async function enterApp(user) {
   currentUser = user;
   const res = await api('/api/state');
   let seed = res.state;
-
-  if (appMode === 'supabase' && seed) {
-    supaCharIds = new Set((seed.characters || []).map((c) => c.id));
-    supaMsgCount = seed.counts || {};
-    delete seed.counts;
-  }
-
-  if (appMode === 'supabase' && (!seed || !(seed.characters || []).length)) {
-    const local = readLocalBackup(user.login);
-    if (local && Array.isArray(local.characters) && local.characters.length) {
-      const count = local.characters.length;
-      if (confirm(`Import ${count} character(s) from this browser into your account? They will be uploaded to Supabase.`)) {
-        const idMap = {};
-        const characters = local.characters.map((c) => {
-          const id = uid();
-          idMap[c.id] = id;
-          return { ...c, id };
-        });
-        const messages = {};
-        Object.entries(local.messages || {}).forEach(([oldId, arr]) => {
-          if (idMap[oldId]) messages[idMap[oldId]] = arr;
-        });
-        seed = {
-          characters,
-          activeId: characters[0] ? characters[0].id : null,
-          messages,
-          profile: { ...(seed && seed.profile ? seed.profile : {}), ...(local.profile || {}) },
-          ai: readLocalAi(),
-        };
-        supaCharIds = new Set();
-        supaMsgCount = {};
-      }
-    }
-  }
-
-  if (!seed && appMode !== 'supabase') {
+  if (!seed) {
+    // one-time import of data created before accounts existed
     try {
       const legacy = JSON.parse(localStorage.getItem('woxaum-v1'));
       if (legacy && Array.isArray(legacy.characters) && legacy.characters.length) seed = legacy;
     } catch (e) { /* nothing to import */ }
   }
-
   adoptState(seed);
-  if (appMode !== 'supabase' && !res.state && seed) await pushState();
+  if (!res.state && seed) await pushState();
   localStorage.removeItem('woxaum-v1');
 
   $('#authScreen').hidden = true;
@@ -1552,7 +1215,6 @@ async function enterApp(user) {
   applyUiScale();
   toggleSendIcon();
   $('#accountLabel').textContent = `Signed in as ${user.login}${user.isAdmin ? ' · admin' : ''}`;
-  if (appMode === 'supabase') syncSupa();
 }
 
 $('#authForm').addEventListener('submit', async (e) => {
@@ -1638,8 +1300,6 @@ async function refreshAdmin() {
 async function openAdmin() {
   if (!currentUser || !currentUser.isAdmin) return;
   $('#moreMenu').classList.remove('open');
-  const newBlock = document.querySelector('.admin-new');
-  if (newBlock) newBlock.style.display = appMode === 'supabase' ? 'none' : '';
   $('#adminOverlay').classList.add('open');
   await refreshAdmin();
 }
@@ -1688,7 +1348,7 @@ $('#adminCreateBtn').addEventListener('click', async () => {
 async function detectMode() {
   const host = location.hostname;
   const staticHost = /(^|\.)github\.io$/i.test(host) || /(^|\.)githubusercontent\.com$/i.test(host) || location.protocol === 'file:';
-  if (staticHost) return supabaseConfigured() ? 'supabase' : 'local';
+  if (staticHost) return 'local';
   try {
     const res = await fetch('/api/health', { cache: 'no-store' });
     const type = res.headers.get('content-type') || '';
@@ -1697,25 +1357,11 @@ async function detectMode() {
       if (data && data.ok) return 'server';
     }
   } catch (e) { /* static hosting */ }
-  return supabaseConfigured() ? 'supabase' : 'local';
+  return 'local';
 }
 
 async function boot() {
   appMode = await detectMode();
-
-  if (appMode === 'supabase') {
-    try {
-      const { data } = await supaClient().auth.getSession();
-      if (data.session) {
-        const { user } = await api('/api/me');
-        await enterApp(user);
-        return;
-      }
-    } catch (e) { /* fall through to the sign-in screen */ }
-    showAuth();
-    return;
-  }
-
   if (appMode === 'local') await localInit();
   if (token && appMode === 'local' && !token.startsWith('local-')) {
     token = '';
